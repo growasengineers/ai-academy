@@ -1,0 +1,5 @@
+# Verified on 2026-10-25 with Python 3.13.17 (CPU only, no GPU needed).
+numpy==2.5.3
+scikit-learn==1.9.1
+scipy==1.18.1
+pytest==9.1.1
