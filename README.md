@@ -21,4 +21,6 @@ Each lesson's `code/README.md` lists its Python and package versions and what to
 
 No lesson needs an API key or a GPU unless its README says so.
 
+Code is MIT licensed (see `LICENSE`).
+
 More lessons are added as they are published. growasengineers.com
