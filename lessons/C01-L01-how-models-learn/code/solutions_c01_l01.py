@@ -1,7 +1,14 @@
-"""Reference solutions for the coding exercises in exercises.md (levels 2, 3, 4, 5 and 7).
+"""Reference solutions for the coding exercises of both parts of the lesson.
 
-Try the exercises before reading this file. Each function is checked by
-tests/test_c01_l01_solutions.py.
+Part 1 (C01-L01, exercises.md in C01-L01-how-models-learn): levels 2, 3, 4 and 5 below are
+`level2_answers`, `mse_no_numpy` + `mse_gradient_no_numpy`, `buggy_loss_and_step` / `fixed_loss_and_step`
+and `nudge_error_analysis`.
+Part 2 (C01-L02, exercises.md in C01-L02-gradient-descent-in-practice): levels 2, 3, 4, 5 and 7 are
+`scaling_answers`, `gradient_descent_no_numpy`, `buggy_descent` / `fixed_descent`, `level5_sweeps` and
+`level7_compare`.
+
+Try the exercises before reading this file. Each function is checked by the solutions tests
+(tests/test_c01_l01_solutions.py in Part 1, tests/test_c01_l02_solutions.py in Part 2).
 """
 import math
 
@@ -48,6 +55,103 @@ def mse_gradient_no_numpy(xs, ys, w, b):
         sum_error += error
     n = len(xs)
     return 2.0 / n * sum_error_times_x, 2.0 / n * sum_error
+
+
+def mse_no_numpy(xs, ys, w, b):
+    """Part 1, level 3: mean squared error of the line (w, b) with plain Python."""
+    if len(xs) != len(ys) or len(xs) == 0:
+        raise ValueError("xs and ys must be non-empty and the same length")
+    total = 0.0
+    for x, y in zip(xs, ys):
+        error = (w * x + b) - y
+        total += error * error
+    return total / len(xs)
+
+
+def nudge_ratio_no_numpy(xs, ys, w, b, h):
+    """Part 1, level 3: the nudge-table ratios (loss after a nudge minus loss before, over h) for w and for b."""
+    before = mse_no_numpy(xs, ys, w, b)
+    return ((mse_no_numpy(xs, ys, w + h, b) - before) / h, (mse_no_numpy(xs, ys, w, b + h) - before) / h)
+
+
+# ---------------------------------------------------------------- Part 1, level 4: a buggy loss and step
+def buggy_loss_and_step(xs, ys, w, b, rate):
+    """The broken loss-and-one-step function from Part 1's exercise 4."""
+    n = len(xs)
+    errors = [(w * x + b) - y for x, y in zip(xs, ys)]
+    loss_value = sum(errors) / n                                  # bug 1: errors are not squared
+    grad_w = 2.0 / n * sum(e * x for e, x in zip(errors, xs))
+    grad_b = 2.0 / n * sum(e * x for e, x in zip(errors, xs))     # bug 2: b's slope copied from w's (times x)
+    w = w + rate * grad_w                                          # bug 3: + instead of -
+    b = b - rate * grad_b
+    return loss_value, w, b
+
+
+def fixed_loss_and_step(xs, ys, w, b, rate):
+    """The corrected version: square the errors, b's slope uses 1 instead of x, and step against the slope."""
+    n = len(xs)
+    errors = [(w * x + b) - y for x, y in zip(xs, ys)]
+    loss_value = sum(e * e for e in errors) / n
+    grad_w = 2.0 / n * sum(e * x for e, x in zip(errors, xs))
+    grad_b = 2.0 / n * sum(errors)
+    return loss_value, w - rate * grad_w, b - rate * grad_b
+
+
+# ---------------------------------------------------------------- Part 1, level 5: how wrong is a nudge?
+NUDGE_SIZES = [1.0, 0.1, 0.01, 0.001]
+
+
+def nudge_error_analysis(nudges=NUDGE_SIZES):
+    """The nudge table at w = 0 (b at its best value), with each ratio's gap from the exact slope.
+
+    For a loss that is a parabola in w, loss(w + h) - loss(w) = h * slope + h**2 * mean(x**2) exactly,
+    so gap / h is the same number, mean(x**2), for every h.
+    """
+    from by_hand import nudge_table
+    from model import mse_gradient
+
+    x, y = data.make_study_data()
+    x_train, y_train, *_ = data.split_train_test(x, y)
+    _w, b_best = closed_form_fit(x_train, y_train)
+    exact = mse_gradient(x_train, y_train, 0.0, b_best)[0]
+    rows = [{"h": r["h"], "ratio": r["ratio"], "gap": r["ratio"] - exact, "gap_over_h": (r["ratio"] - exact) / r["h"]}
+            for r in nudge_table(x_train, y_train, 0.0, b_best, nudges)]
+    return {"exact_slope": exact, "mean_x_squared": float(np.mean(x_train ** 2)), "rows": rows}
+
+
+# ---------------------------------------------------------------- Part 2, level 2: scaling by hand
+SCALE_HOURS = [2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]
+SCALED_LINE_W, SCALED_LINE_B, SCALE_PREDICT_AT = 6.0, 70.0, 7.0
+
+
+def scaling_answers():
+    """Part 2, exercise 2: standardise eight hours by hand, then convert a scaled line back to real hours."""
+    from gradient_descent import unstandardize_params
+
+    scaled, mean, std = standardize(SCALE_HOURS)
+    w, b = unstandardize_params(SCALED_LINE_W, SCALED_LINE_B, mean, std)
+    scaled_x = (SCALE_PREDICT_AT - mean) / std
+    return {"mean": mean, "std": std, "scaled": scaled.tolist(), "w": w, "b": b,
+            "scaled_x_at": scaled_x, "predict_scaled": SCALED_LINE_W * scaled_x + SCALED_LINE_B,
+            "predict_raw": w * SCALE_PREDICT_AT + b}
+
+
+# ---------------------------------------------------------------- Part 2, level 3: the loop with plain lists
+def gradient_descent_no_numpy(xs, ys, learning_rate, steps, divergence_factor=1e6):
+    """Part 2, exercise 3: full-batch gradient descent with lists, a history, and the divergence guard."""
+    if len(xs) != len(ys) or len(xs) == 0:
+        raise ValueError("xs and ys must be non-empty and the same length")
+    w, b = 0.0, 0.0
+    start = mse_no_numpy(xs, ys, w, b)
+    history = [(0, w, b, start)]
+    for step in range(1, steps + 1):
+        grad_w, grad_b = mse_gradient_no_numpy(xs, ys, w, b)      # both slopes from the same spot
+        w, b = w - learning_rate * grad_w, b - learning_rate * grad_b
+        current = mse_no_numpy(xs, ys, w, b)
+        history.append((step, w, b, current))
+        if not math.isfinite(current) or current > divergence_factor * max(start, 1e-12):
+            return {"w": w, "b": b, "history": history, "diverged": True, "steps_run": step}
+    return {"w": w, "b": b, "history": history, "diverged": False, "steps_run": steps}
 
 
 # ---------------------------------------------------------------- Level 4: the buggy loop and its fix
@@ -134,7 +238,9 @@ def level7_compare():
 
 
 if __name__ == "__main__":
-    print("level 2:", level2_answers())
+    print("part 1, level 2:", level2_answers())
+    print("part 1, level 5:", nudge_error_analysis())
+    print("part 2, level 2:", scaling_answers())
     print("level 7:", level7_compare())
     sweeps = level5_sweeps()
     print("level 5 bounds:", sweeps["raw_bound"], sweeps["scaled_bound"])

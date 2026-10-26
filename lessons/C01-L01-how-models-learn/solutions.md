@@ -1,7 +1,8 @@
-# C01-L01 worked solutions
+# C01-L01 worked solutions (Part 1)
 
 Reasoning first, numbers second. Every number here is reproduced by `code/solutions_c01_l01.py` or by the lesson
-code, and checked by `code/tests/test_c01_l01_solutions.py`.
+code, and checked by `code/tests/test_c01_l01_solutions.py`. Part 2's solutions are in
+`../C01-L02-gradient-descent-in-practice/solutions.md`.
 
 ---
 
@@ -14,9 +15,10 @@ that training adjusts. x is the input and is never adjusted.
 **1b.** η is the learning rate. It is a **hyperparameter**: we choose it before training, and gradient descent
 does not learn it. w and b are parameters, which training does learn (Google MLCC "Hyperparameters", source S09).
 
-**1c.** (i) good rate: a fast early drop, then convergence near the minimum. (ii) too large: divergence, with each
-overshoot landing higher (in the lesson, rate 0.025 on raw hours passed five billion by step 27). (iii) too small:
-safe but slow (in the lesson, rate 0.001 was still at about 139 after 1000 steps, against a minimum of 15.76).
+**1c.** Both go **up**. The step is *minus* the learning rate times the gradient, so a negative slope makes
+a parameter grow: w changes by −η·(−435) = +435η and b by +60η. w moves about **seven times** further than b, because
+its slope is about seven times larger (435.3 ÷ 60.2 ≈ 7.2). This is the same spot as the lesson's nudge table (w = 0, b
+frozen at about 40.5), where minus the gradient is (+435, +60): "increase w a lot and b a little".
 
 ---
 
@@ -41,6 +43,16 @@ Data x = (0, 1, 2), y = (1, 3, 8), w = 2, b = 1, n = 3.
 ## Level 3
 
 ```python
+def mse_no_numpy(xs, ys, w, b):
+    if len(xs) != len(ys) or len(xs) == 0:
+        raise ValueError("xs and ys must be non-empty and the same length")
+    total = 0.0
+    for x, y in zip(xs, ys):
+        error = (w * x + b) - y
+        total += error * error
+    return total / len(xs)
+
+
 def mse_gradient_no_numpy(xs, ys, w, b):
     if len(xs) != len(ys) or len(xs) == 0:
         raise ValueError("xs and ys must be non-empty and the same length")
@@ -54,14 +66,18 @@ def mse_gradient_no_numpy(xs, ys, w, b):
     return 2.0 / n * sum_error_times_x, 2.0 / n * sum_error
 ```
 
-**How it is verified:** `test_level3_loop_gradient_matches_numpy_and_finite_difference` compares it at (0, 0),
-(4, 41) and (−2, 7.5) with `model.mse_gradient` (relative tolerance 1e-12) and with the central finite difference
-(tolerance 1e-6). It also checks that empty input raises.
+The nudge check (`nudge_ratio_no_numpy`): `(mse_no_numpy(xs, ys, w + h, b) - mse_no_numpy(xs, ys, w, b)) / h`, and
+the same with `b + h`.
 
-**Why the finite difference is a referee and not a trainer:** it needs no algebra, so it cannot repeat a mistake in
-our derivation. But it costs two extra loss evaluations per parameter for every gradient, and it is only
-approximate: too large an h gives truncation error, too small an h gives rounding error. With millions of
-parameters, that cost is prohibitive.
+**How it is verified:** `test_part1_level3_loop_loss_and_gradient_match_numpy_and_the_nudge` compares both functions
+at (0, 0), (4, 41) and (−2, 7.5) with `model.loss` and `model.mse_gradient` (relative tolerance 1e-12), and the
+gradient with the nudge ratios at h = 0.0001 (absolute tolerance 0.01). It also checks that empty input raises. If you didn't want to rely on `model.mse_gradient` (its code is shown only in Part 2), the by-hand toy
+values are enough: on the three toy students at w = 5, b = 45 the loop gradient is (−8, −4), as in the video at
+`g25`–`g26` (`test_level3_loop_gradient_gives_the_by_hand_toy_slopes`).
+
+**Why the nudge is a check and not a trainer:** it needs no algebra, so it cannot repeat a mistake in our
+derivation. But every slope costs an extra loss calculation over all the data, for every parameter, and the ratio is
+only approximate (Level 5 measures how approximate). With millions of parameters, that is far too slow.
 
 ---
 
@@ -69,110 +85,38 @@ parameters, that cost is prohibitive.
 
 The three bugs:
 
-1. **`w = w + learning_rate * grad_w`** has the wrong sign. It steps *uphill*, so the loss grows instead of
-   shrinking. Fix: `w = w - learning_rate * grad_w`.
-2. **`grad_b` is computed after `w` has changed**, so the two slopes come from different points. The update is no
-   longer a gradient step. Fix: compute both slopes before updating either parameter.
-3. **`grad_w` is missing the `2.0 / n` factor.** The step in w is then 2/n times too large relative to b, here
-   15 times (n = 30 gives 2/n = 1/15). On its own, this rescales the effective learning rate for w and can tip it
-   into divergence. Fix: multiply by `2.0 / n`.
+1. **`loss_value = sum(errors) / n`** forgets to square. Positive and negative errors cancel, and the "loss" can even
+   be negative. Fix: `sum(e * e for e in errors) / n`.
+2. **`grad_b` multiplies each error by x**, copying w's formula. b's slope is the same formula with x replaced by
+   one, so b moves by the wrong amount (here twice too far: −8 instead of −4). Fix: `2.0 / n * sum(errors)`.
+3. **`w = w + rate * grad_w`** steps *up* the slope, so w moves the wrong way. Fix: `w - rate * grad_w`.
 
-Fixed version (`fixed_descent`):
+On the lesson's three students with w = 5, b = 45 and rate 0.1, the buggy function returns loss **−2**, w = **4.2**
+and b = **45.8**. The fixed function (`fixed_loss_and_step`) returns loss **6**, w = **5.8** and b = **45.4**, the
+lesson's numbers (`test_part1_level4_buggy_step_is_wrong_and_fixed_step_matches_the_lesson`).
 
-```python
-for _ in range(steps):
-    grad_w = sum(((w * x + b) - y) * x for x, y in zip(xs, ys)) * 2.0 / n
-    grad_b = sum((w * x + b) - y for x, y in zip(xs, ys)) * 2.0 / n
-    w = w - learning_rate * grad_w
-    b = b - learning_rate * grad_b
-```
-
-**Evidence:** on standardised training hours with η = 0.1 for 200 steps, `fixed_descent` returns
-w ≈ 12.0595, b ≈ 70.6367. The closed form on the same scaled data gives the same values to within 1e-6
-(`test_level4_buggy_loop_fails_and_fixed_loop_matches_closed_form`). The buggy loop runs away: after only five
-steps, w is already about −12,337.
-
-**Which bugs a gradient check catches:** a finite-difference check of the *gradient function* catches bug 3 (a
-wrong formula). Bugs 1 and 2 live in the *update loop*, not the gradient, so you catch them by watching the loss:
-it should never rise at a small learning rate. The lesson's test `test_good_rate_loss_never_increases` does exactly
-that.
+The negative loss should raise the alarm at once: an average of squares can never be below zero. The w step is the
+second clue. Both slopes are negative, so both parameters should go up, but w went down.
 
 ---
 
 ## Level 5
 
-Results from `level5_sweeps()` (1000 steps from (0, 0); "steps" means steps to get within 0.1 % of the minimum
-training MSE, 15.76):
+`nudge_error_analysis()` on the training split, at w = 0 with b frozen at its best value (exact slope ≈ −435.29):
 
-| raw rate | outcome | | scaled rate | outcome |
-|---|---|---|---|---|
-| 0.005 | not reached (loss 29.75) | | 0.01 | 315 steps |
-| 0.01 | not reached (loss 16.68) | | 0.1 | 29 steps |
-| 0.015 | not reached (loss 15.82) | | 0.3 | 7 steps |
-| 0.02 | 874 steps | | 0.5 | 1 step |
-| 0.021 | 832 steps (fastest) | | 0.9 | 29 steps |
-| 0.022 | **diverged** | | 0.99 | 315 steps |
-| 0.025 | **diverged** | | 1.01 | **diverged** |
-| | | | 1.1 | **diverged** |
+| h | ratio | gap = ratio − exact | gap ÷ h |
+|---|---|---|---|
+| 1 | −390.24 | 45.05 | 45.05 |
+| 0.1 | −430.78 | 4.505 | 45.05 |
+| 0.01 | −434.84 | 0.4505 | 45.05 |
+| 0.001 | −435.24 | 0.04505 | 45.05 |
 
-1. Raw hours: the largest safe rate is 0.021, which is also the fastest (832 steps). Standardised hours: the largest
-   safe rate is 0.99, and the fastest is 0.5 (one step).
-2. The MSE bowl is a quadratic with Hessian H = 2·[[mean(x²), mean(x)], [mean(x), 1]]. Gradient descent on a
-   quadratic is stable only when η < 2/λ_max. For raw hours, 2/λ_max ≈ **0.0218**: between 0.021 (safe) and 0.022
-   (diverges), exactly as measured. For standardised hours, mean(x′) = 0 and mean(x′²) = 1, so H = 2·I, λ_max = 2
-   and the bound is **1.0**: between 0.99 and 1.01, again as measured. (The idea that the Hessian's eigenvalues set
-   the scale of the learning rate is from Goodfellow et al., *Deep Learning*, §4.3.1, source S13.)
-3. On standardised data the two parameters separate. Each one's distance to its optimum is multiplied by (1 − 2η)
-   at every step. For η = 0.1 the factor is 0.8; for η = 0.9 it is −0.8. The size is the same, but the second one
-   flips sign each step, so it zig-zags. Both shrink at the same rate, so both need 29 steps. For η = 0.5 the factor
-   is 0, so a single step lands exactly on the minimum. Above η = 1 the factor's size exceeds 1, and every step
-   grows the distance: divergence.
-4. On raw hours the bowl's curvature differs by a factor of about 338 between its steepest and flattest directions
-   (`raw_curvature_ratio` in `facts.py`). The rate must stay below about 0.0218 for the steep direction. In the flat
-   direction each step then shrinks the remaining distance by only about 1 − 0.021·0.27 ≈ 0.994, which is why
-   hundreds of steps are needed. A bigger rate would diverge first. Changing the units makes both curvatures equal,
-   so no compromise is needed.
-
----
-
-## Level 6
-
-- **(a) Closed form** (`LinearRegression`, or `np.linalg.lstsq` with an intercept column). There are 2,000 rows and
-  6 features, so the cost, which grows with rows × features² (scikit-learn user guide §1.1.1.2, S04), is trivial.
-  The answer is exact, and there is no learning rate to tune. Scaling is optional for the fit but helps when
-  comparing coefficients. **Testing:** split off a test set first (for example 25 %) and remove any duplicate rows
-  across the split. Report train and test MSE. A large gap, or a test MSE far above the noise level, means something
-  is wrong.
-- **(b) Gradient descent on batches** (for example scikit-learn's `SGDRegressor`, which its guide recommends for
-  problems with a large number of training samples, S05). Batches let you update without refitting on everything.
-  **Preprocessing:** standardise with mean and standard deviation computed on training data only, and apply the
-  same transform to new data. **Testing:** keep a test set from a later time period, untouched by training, and
-  monitor the training loss for divergence (a rising loss means lower the learning rate).
-- **(c) Gradient descent**, because a neural network has no closed-form solution, and nearly all of deep learning is
-  trained with stochastic gradient descent (Goodfellow et al. §5.9, S14). **Preprocessing:** scale all 50 features.
-  **Testing:** a held-out test set split before training, plus a gradient check on a small version of the model.
-  Watch for overfitting: training error falling while test error rises.
-
----
-
-## Level 7
-
-`level7_compare()` on `make_curved_data()` (synthetic, seed 21, 30 train / 10 test):
-
-| model | train MSE | test MSE |
-|---|---|---|
-| straight line ŷ = w·x + b | 38.56 | 25.99 |
-| with x²: ŷ = w₁·x + w₂·x² + b | 9.13 | 1.60 |
-
-1. Speed rises steeply over the first few hours, then flattens near 90: a curve that bends downward.
-2. The line's training MSE is 38.56 (RMSE ≈ 6.2 words per minute) and its test MSE is 25.99. (Here the test MSE is
-   lower than the training MSE; with only 10 test points this kind of variation is normal.)
-3. Adding x² cuts training MSE to 9.13 and test MSE to 1.60, more than halving both
-   (`test_level7_line_underfits_a_curve_and_squared_feature_fixes_it`).
-4. The line is **underfitting**. The evidence is its *training* error: it stays high even though the line is the
-   best possible line for this data (least squares). That matches the textbook definition: unable to obtain a
-   sufficiently low training error (S14 §5.2). More optimisation cannot fix the wrong shape.
-5. Adding many more powers (x³, x⁴, … x¹⁵) raises capacity until the model can memorise noise, like the memoriser in
-   the lesson. You detect it with the train/test gap: training error keeps falling while test error starts rising.
-   The fix is to choose model complexity on a validation set (a later lesson) and touch the test set only once at
-   the end.
+1–2. gap ÷ h is the **same number every time**, and it equals mean(x²) ≈ 45.05, the average of the squared training
+   hours (`test_part1_level5_nudge_gap_is_h_times_mean_x_squared`).
+3. With b fixed, write e = w·x + b − y. Then ((w + h)·x + b − y)² = (e + h·x)² = e² + 2·h·e·x + h²·x². Average over the
+   students and subtract mean(e²): the change in the loss is h·(2·mean(e·x)) + h²·mean(x²). The first term is h times
+   the exact slope. Divide by h: ratio = slope + h·mean(x²). So the gap is exactly h·mean(x²). It shrinks in
+   proportion to h, which is why each row in the lesson's table got ten times closer.
+4. To get within 0.01 you need h·45.05 < 0.01, so h below about 0.0002. Nudging is a fine referee for a formula you
+   derived, but as a training method it costs an extra pass over all the data for every parameter at every step,
+   and it is never exact. The formula gives every slope from a single pass over the errors.

@@ -6,7 +6,8 @@ Runnable, tested code, exercises and solutions for the GrowAsEngineers AI Academ
 
 | Lesson | Track | Module | Folder |
 |---|---|---|---|
-| How Machines Learn from Examples: Linear Regression and Gradient Descent from Scratch | Classical Machine Learning | C01 How Models Learn from Examples | [`lessons/C01-L01-how-models-learn`](lessons/C01-L01-how-models-learn) |
+| How Machines Learn from Examples, Part 1: Loss, Slopes and Gradient Descent by Hand | Classical Machine Learning | C01 How Models Learn from Examples | [`lessons/C01-L01-how-models-learn`](lessons/C01-L01-how-models-learn) |
+| How Machines Learn from Examples, Part 2: Gradient Descent in Code, Learning Rates and Testing | Classical Machine Learning | C01 How Models Learn from Examples | [`lessons/C01-L02-gradient-descent-in-practice`](lessons/C01-L02-gradient-descent-in-practice) |
 
 ## Running a lesson
 

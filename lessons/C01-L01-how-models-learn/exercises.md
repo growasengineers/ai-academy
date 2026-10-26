@@ -1,6 +1,10 @@
-# C01-L01 exercises: How machines learn from examples
+# C01-L01 exercises (Part 1): loss, slopes and gradient descent by hand
 
-Work through these in order. Solutions are in `solutions.md`. Read them only after you have an answer of your own.
+These exercises cover Part 1 of the lesson: the model, the loss, the slope, the gradient and the update rule. Part 2's
+exercises (learning rates, scaling, testing, design and transfer) are in
+`../C01-L02-gradient-descent-in-practice/exercises.md`.
+
+Work through them in order. Solutions are in `solutions.md`. Read them only after you have an answer of your own.
 The coding exercises use the lesson code in `code/`. Run everything from that folder.
 
 Notation: ŷ = w·x + b, error e = ŷ − y, MSE = (1/n) Σ e², ∂MSE/∂w = (2/n) Σ e·x, ∂MSE/∂b = (2/n) Σ e,
@@ -15,14 +19,12 @@ weight and the bias. Say which of them are *parameters* and which one is the *in
 
 **1b.** In the update rule w ← w − η·∂MSE/∂w, what is η called, and is it a parameter or a hyperparameter? Why?
 
-**1c.** Three loss curves (loss against step) are described below. Match each to "learning rate too small",
-"good learning rate" and "learning rate too large":
-- (i) falls steeply at first, then flattens close to the minimum;
-- (ii) rises every step and grows without limit;
-- (iii) falls in an almost straight, shallow line and is still far from the minimum at the end.
+**1c.** At some (w, b), the gradient of the loss is (−435, −60). Does gradient descent move w up or down? And b?
+Which of the two moves further, and why?
 
 **Success criteria:** every symbol is named correctly. 1b names the learning rate as a hyperparameter and gives the
-reason (we choose it; training does not learn it). All three matches in 1c are right.
+reason (we choose it; training does not learn it). 1c says both go up, because the step is *minus* the gradient, and
+w moves about seven times further than b because its slope is about seven times larger.
 
 ---
 
@@ -43,92 +45,63 @@ signs and sizes of the two partial derivatives.
 
 ## Level 3 · Implementation
 
-Write `mse_gradient_no_numpy(xs, ys, w, b)` using only Python lists and one `for` loop (no NumPy). It must return
-`(dMSE/dw, dMSE/db)` and raise `ValueError` on empty or mismatched input.
+Using only Python lists and `for` loops (no NumPy), write:
 
-Then verify it. On the lesson's synthetic data (`data.make_study_data()`), compare it at three different (w, b)
-pairs with `model.mse_gradient` and with the finite-difference `model.numerical_gradient`.
+- `mse_no_numpy(xs, ys, w, b)`, the mean squared error, and
+- `mse_gradient_no_numpy(xs, ys, w, b)`, returning `(dMSE/dw, dMSE/db)` from the two formulas.
 
-**Success criteria:** agreement with `mse_gradient` to about 12 significant digits, and with the finite difference
-to at least 6 decimal places, at every pair. The function raises on `[]`. A short note explains why
-the finite difference is a good referee but a bad training method.
+Both must raise `ValueError` on empty or mismatched input.
+
+Then check them two ways on the lesson's synthetic data (`data.make_study_data()`), at three different (w, b) pairs:
+against `model.loss` and `model.mse_gradient`, and against the lesson's nudging method, which divides the change in
+your loss by a nudge of h = 0.0001, once for w and once for b.
+(`model.loss` is the loss function shown in the video at `l17`–`l19`. `model.mse_gradient` is the lesson's NumPy
+version of the same two slope formulas from `g19`–`g20`; this part doesn't show its code, and Part 2 walks through it
+at `c1`–`c2b`. If you'd rather not use code you haven't seen, check the gradient against the nudge ratios and the
+by-hand values from the video instead: on the three toy students with w = 5 and b = 45 it must give −8 and −4.)
+
+**Success criteria:** agreement with `model.loss` and `model.mse_gradient` to about 12 significant digits. Agreement
+with the nudge ratios to within 0.01 at every pair. Both functions raise on `[]`. A short note says why the nudge is
+a good check but a slow way to get a gradient.
 
 ---
 
 ## Level 4 · Debugging
 
-This loop is supposed to fit a line, but it doesn't. Find **three** bugs, explain what each one does to training,
-and fix them. (It is `buggy_descent` in `code/solutions_c01_l01.py`.)
+This function should return the MSE and the parameters after one gradient-descent step, but it doesn't. Find
+**three** bugs, explain what each does, and fix them. (It is `buggy_loss_and_step` in `code/solutions_c01_l01.py`.)
 
 ```python
-def buggy_descent(xs, ys, learning_rate, steps):
-    w, b = 0.0, 0.0
+def buggy_loss_and_step(xs, ys, w, b, rate):
     n = len(xs)
-    for _ in range(steps):
-        grad_w = sum(((w * x + b) - y) * x for x, y in zip(xs, ys))
-        w = w + learning_rate * grad_w
-        grad_b = sum((w * x + b) - y for x, y in zip(xs, ys)) * 2.0 / n
-        b = b - learning_rate * grad_b
-    return w, b
+    errors = [(w * x + b) - y for x, y in zip(xs, ys)]
+    loss_value = sum(errors) / n
+    grad_w = 2.0 / n * sum(e * x for e, x in zip(errors, xs))
+    grad_b = 2.0 / n * sum(e * x for e, x in zip(errors, xs))
+    w = w + rate * grad_w
+    b = b - rate * grad_b
+    return loss_value, w, b
 ```
 
-**Success criteria:** all three bugs found, each with its effect on training. Your fixed loop, run on the
-standardised training hours with η = 0.1 for 200 steps, matches `evaluate.closed_form_fit` on the same scaled data
-to 6 decimal places. Bonus: say which bug a finite-difference gradient check would have caught.
+**Success criteria:** all three bugs found, each with its effect. On the lesson's three students (hours 1, 2, 3;
+scores 53, 55, 63) with w = 5, b = 45 and rate 0.1, your fixed function returns the lesson's numbers: loss 6, then
+w = 5.8 and b = 45.4. Say what the buggy version returns on the same input, and which of its outputs should have
+made you suspicious at once.
 
 ---
 
 ## Level 5 · Analysis (experiment)
 
-Using `gradient_descent.learning_rate_sweep`, run 1000 steps from (0, 0) on the training split:
+The lesson's nudge table at w = 0 (b frozen at its best value) gave rise-over-run ratios of about −390.2, −430.8,
+−434.8 and −435.2 for nudges of 1, 0.1, 0.01 and 0.001. The exact slope there is about −435.29.
 
-- on **raw hours** with rates 0.005, 0.01, 0.015, 0.02, 0.021, 0.022, 0.025;
-- on **standardised hours** with rates 0.01, 0.1, 0.3, 0.5, 0.9, 0.99, 1.01, 1.1.
+1. For each nudge h, compute the gap between the ratio and the exact slope, and the gap divided by h
+   (`nudge_error_analysis()` in `code/solutions_c01_l01.py` does it; try it yourself first with `by_hand.nudge_table`).
+2. What do you notice about gap ÷ h? Compare it with the average of the squared training hours, mean(x²).
+3. Explain why. Hint: with b fixed, the loss is a parabola in w. Expand mean((w + h)·x + b − y)² − mean(w·x + b − y)².
+4. How small must h be for the ratio to be within 0.01 of the exact slope? Why does that make nudging a poor way to
+   train a model with millions of parameters, even though it is a good way to check a formula?
 
-1. For each feature version, find the largest rate that does not diverge and the rate that reaches the minimum in
-   the fewest steps.
-2. The lesson's outline says the stability limit is 2 ÷ (largest curvature of the bowl). Compute that number for
-   both versions (`level5_sweeps()` returns it) and compare it with what you measured.
-3. On standardised hours, rates 0.1 and 0.9 need exactly the same number of steps, and 0.5 needs only one. Explain
-   why, using the update w′ ← w′ − η·2·(w′ − w′*) that holds on standardised data.
-4. In two or three sentences: why is "just pick a bigger learning rate" not a fix for the raw feature?
-
-**Success criteria:** a table of your results. The measured edge sits between the two rates around the computed
-bound, for both versions. Part 3 is explained with the factor (1 − 2η). Part 4 refers to the steep and flat
-directions of the valley.
-
----
-
-## Level 6 · Design
-
-For each scenario, choose **closed-form least squares** or **gradient descent**, list the preprocessing you would
-do, and describe how you would test the result. Justify each choice in two or three sentences, citing the
-trade-offs from the lesson.
-
-- (a) 2,000 houses, 6 numeric features, one-off analysis on a laptop.
-- (b) Many millions of rows arriving each day, too many to refit from scratch every time.
-- (c) A small neural network that predicts the same target from 50 features.
-
-**Success criteria:** (a) uses the closed form (or `LinearRegression`). (b) uses gradient descent on batches, with
-feature scaling. (c) uses gradient descent, because there is no closed form. Every answer includes a held-out test
-set that is split before any fitting, with no duplicates across the split. Scaling statistics come from the
-training data only. Each answer has a sentence on how you would notice failure (rising loss, or a large
-train/test gap).
-
----
-
-## Level 7 · Transfer
-
-New synthetic problem: "practice hours vs typing speed". Gains are fast at first and then level off
-(`make_curved_data()` in `code/solutions_c01_l01.py`).
-
-1. Plot it, or print it sorted by hours, and describe the shape.
-2. Fit a straight line on the training split and report the training and test MSE.
-3. Add a second feature, x², and fit ŷ = w₁·x + w₂·x² + b by least squares (`fit_with_features`). Report the
-   training and test MSE again.
-4. Is the straight line underfitting or overfitting? What evidence tells you?
-5. Name one risk of adding more and more powers of x, and how you would detect it.
-
-**Success criteria:** the line's training MSE stays high (underfitting). The x² model at least halves both
-training and test MSE (`level7_compare()`). Part 4 uses *training* error as the evidence. Part 5 names
-overfitting/memorising, with a growing train/test gap as the detector.
+**Success criteria:** a table of h, ratio, gap and gap ÷ h. gap ÷ h is the same number every time, mean(x²) ≈ 45.05,
+and the expansion shows why: the extra term is exactly h·mean(x²). Part 4 gives h below about 0.0002 and argues from
+the cost (an extra loss calculation per parameter per nudge).

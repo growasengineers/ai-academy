@@ -1,12 +1,14 @@
 # C01-L01 companion code: linear regression and gradient descent from scratch
 
-This is the code behind the video "How Machines Learn from Examples". Everything runs on a laptop CPU in about a
-second. There is no network access, no API key and no GPU.
+This is the code behind the two-part video "How Machines Learn from Examples" (Part 1, C01-L01: loss, slopes and
+gradient descent by hand; Part 2, C01-L02: gradient descent in code, learning rates and testing). Both parts ship
+the same code folder, so every number either video says comes from the same `FACTS()`. Everything runs on a laptop
+CPU in about a second. There is no network access, no API key and no GPU.
 
 ## Setup
 
 ```bash
-cd C01-L01-how-models-learn/code          # this folder, wherever you cloned it
+cd C01-L01-how-models-learn/code          # this folder, wherever you cloned it (or C01-L02-…/code)
 python3 -m venv .venv && source .venv/bin/activate      # optional but recommended
 pip install -r requirements.txt
 ```
@@ -44,11 +46,12 @@ python3 -m pytest -q
 | `data.py` | the **synthetic** dataset: 40 students, hours uniform in 1–10, score = 5·hours + 40 + Normal(0, 5) noise, seed 14; a seeded 30/10 train/test split; the 3-student by-hand example |
 | `model.py` | `predict` (the line), `mse` (the loss), `mse_gradient` (∂MSE/∂w, ∂MSE/∂b), `numerical_gradient` (finite-difference check), loss curve and grid for plots |
 | `gradient_descent.py` | `gradient_descent` (the loop, with a divergence guard), `learning_rate_sweep`, `standardize` / `unstandardize_params` |
-| `evaluate.py` | `closed_form_fit` (`numpy.linalg.lstsq`), `sklearn_fit` (`LinearRegression`), the memoriser, train/test report, the 200-dataset repeat, the outlier refit |
+| `evaluate.py` | `closed_form_fit` (`numpy.linalg.lstsq`), `sklearn_fit` (`LinearRegression`), the memoriser, train/test report, the 200-dataset repeat, the outlier refit, and `sklearn_pipeline_fit` (the scaler + `LinearRegression` pipeline Part 2 shows at `t17`) |
+| `by_hand.py` | the slow "by hand" moments: the nudge table (rise over run → derivative), the chain rule checked by nudging (a square, one error, one squared error), the state table of the first descent steps, the valley floor and how often a path turns round, the bouncing positions of a diverging run, small counts (grid sizes, closed-form work, one batch step's work) |
 | `facts.py` | `FACTS()`: every number the narration and the screen use; the narration checks evaluate against it |
 | `walkthrough.py` | runs the lesson end to end and prints each stage |
-| `solutions_c01_l01.py` | solutions for exercises 2, 3, 4, 5 and 7 |
-| `tests/` | `test_c01_l01_*.py`: normal, edge and failure cases, the gradient check, agreement with lstsq and scikit-learn, split hygiene, determinism, and the solutions |
+| `solutions_c01_l01.py` | solutions for the coding exercises of both parts (Part 1: levels 2–5; Part 2: levels 2–5 and 7) |
+| `tests/` | normal, edge and failure cases, the gradient check, agreement with lstsq and scikit-learn, split hygiene, determinism, every narrated number, and the solutions. The files are named `test_c01_l01_*.py` in Part 1's copy and `test_c01_l02_*.py` in Part 2's copy (same contents), so pytest can collect both folders in one run |
 
 ## Experiment record (SPEC §11.2)
 
@@ -71,4 +74,5 @@ python3 -m pytest -q
 ## Not a production implementation
 
 This code is educational: it shows every step. In real projects use
-`make_pipeline(StandardScaler(), LinearRegression())` from scikit-learn, or `SGDRegressor` for very large data.
+`make_pipeline(StandardScaler(), LinearRegression())` from scikit-learn (`evaluate.sklearn_pipeline_fit` shows it and
+is tested against the closed form), or `SGDRegressor` for very large data.

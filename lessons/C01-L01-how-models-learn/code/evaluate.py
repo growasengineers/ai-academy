@@ -76,3 +76,22 @@ def train_test_report(x_train, y_train, x_test, y_test, w, b):
         "train_mse": mse(y_train, predict(x_train, w, b)),
         "test_mse": mse(y_test, predict(x_test, w, b)),
     }
+
+
+def sklearn_pipeline_fit(x_train, y_train, x_test, y_test):
+    """The production version of this lesson in a few lines: standardise the feature, then fit a line.
+
+    Fit on the training set, score on the test set. Returns the pipeline's line converted back to real
+    hours (so it can be compared with closed_form_fit) and its test-set score (R squared, 1.0 = perfect).
+    """
+    from sklearn.linear_model import LinearRegression
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    pipe = make_pipeline(StandardScaler(), LinearRegression())
+    pipe.fit(np.asarray(x_train, dtype=float).reshape(-1, 1), np.asarray(y_train, dtype=float))
+    score = pipe.score(np.asarray(x_test, dtype=float).reshape(-1, 1), np.asarray(y_test, dtype=float))
+    scaler, line = pipe[0], pipe[-1]
+    w = float(line.coef_[0] / scaler.scale_[0])
+    b = float(line.intercept_ - w * scaler.mean_[0])
+    return {"w": w, "b": b, "test_score": float(score)}
